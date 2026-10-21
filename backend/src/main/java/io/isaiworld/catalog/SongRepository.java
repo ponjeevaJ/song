@@ -17,7 +17,7 @@ public class SongRepository {
         rs.getString("id"), rs.getString("title"), rs.getString("movie"), rs.getString("singer"),
         rs.getString("composer"), rs.getString("album"), rs.getString("genre"),
         rs.getDate("release_date") == null ? null : rs.getDate("release_date").toLocalDate(),
-        rs.getString("artwork_url"), rs.getString("playback_url"), rs.getString("lyrics_url"));
+        rs.getString("artwork_url"), rs.getString("playback_url"), rs.getString("lyrics_url"), null);
     private final JdbcTemplate jdbc;
 
     public SongRepository(JdbcTemplate jdbc) {

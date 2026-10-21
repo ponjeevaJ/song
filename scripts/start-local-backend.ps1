@@ -1,5 +1,21 @@
 $ErrorActionPreference = 'Stop'
 
+$javaExecutable = if ([string]::IsNullOrWhiteSpace($env:JAVA_HOME)) { $null } else {
+    Join-Path $env:JAVA_HOME 'bin\java.exe'
+}
+if (-not $javaExecutable -or -not (Test-Path $javaExecutable)) {
+    $javaInstallation = Get-ChildItem 'C:\Program Files\Java' -Directory -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path (Join-Path $_.FullName 'bin\javac.exe') } |
+        Sort-Object Name -Descending |
+        Select-Object -First 1
+    if ($javaInstallation) {
+        $env:JAVA_HOME = $javaInstallation.FullName
+        $env:PATH = "$(Join-Path $env:JAVA_HOME 'bin');$env:PATH"
+    } else {
+        $env:JAVA_HOME = ''
+    }
+}
+
 $workspace = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $workspace '.env'
 if (Test-Path $envFile) {
@@ -90,18 +106,19 @@ if (-not $buildRequired -and $newestSource.LastWriteTime -gt (Get-Item $jar).Las
 
 if ($buildRequired) {
     $maven = (Get-Command mvn.cmd, mvn -ErrorAction SilentlyContinue | Select-Object -First 1)
+    $mavenCommand = if ($maven) { $maven.Source }
     if (-not $maven) {
         $bundledMaven = Join-Path $env:TEMP 'isai-maven\apache-maven-3.9.11\bin\mvn.cmd'
         if (Test-Path $bundledMaven) {
-            $maven = Get-Item $bundledMaven
+            $mavenCommand = $bundledMaven
         }
     }
-    if (-not $maven) {
+    if (-not $mavenCommand) {
         throw 'Backend sources changed but Maven is not installed. Install Maven 3.9+ and run the backend task again.'
     }
     Push-Location (Join-Path $workspace 'backend')
     try {
-        & $maven.Source -q -DskipTests package
+        & $mavenCommand -q -DskipTests package
         if ($LASTEXITCODE -ne 0) {
             throw 'The backend build failed. Review the Maven output before starting the app.'
         }

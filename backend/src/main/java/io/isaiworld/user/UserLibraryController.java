@@ -41,7 +41,7 @@ public class UserLibraryController {
             """, (rs, row) -> new Song(rs.getString("id"), rs.getString("title"), rs.getString("movie"),
                 rs.getString("singer"), rs.getString("composer"), rs.getString("album"), rs.getString("genre"),
                 rs.getDate("release_date") == null ? null : rs.getDate("release_date").toLocalDate(),
-                rs.getString("artwork_url"), rs.getString("playback_url"), rs.getString("lyrics_url")), user.id());
+                rs.getString("artwork_url"), rs.getString("playback_url"), rs.getString("lyrics_url"), null), user.id());
     }
 
     @PostMapping("/favorites/{songId}")
@@ -71,7 +71,7 @@ public class UserLibraryController {
             """, (rs, row) -> new Song(rs.getString("id"), rs.getString("title"), rs.getString("movie"),
                 rs.getString("singer"), rs.getString("composer"), rs.getString("album"), rs.getString("genre"),
                 rs.getDate("release_date") == null ? null : rs.getDate("release_date").toLocalDate(),
-                rs.getString("artwork_url"), rs.getString("playback_url"), rs.getString("lyrics_url")), user.id());
+                rs.getString("artwork_url"), rs.getString("playback_url"), rs.getString("lyrics_url"), null), user.id());
     }
 
     @GetMapping("/playlists")
@@ -108,7 +108,7 @@ public class UserLibraryController {
             """, (rs, row) -> new Song(rs.getString("id"), rs.getString("title"), rs.getString("movie"),
                 rs.getString("singer"), rs.getString("composer"), rs.getString("album"), rs.getString("genre"),
                 rs.getDate("release_date") == null ? null : rs.getDate("release_date").toLocalDate(),
-                rs.getString("artwork_url"), rs.getString("playback_url"), rs.getString("lyrics_url")), playlistId);
+                rs.getString("artwork_url"), rs.getString("playback_url"), rs.getString("lyrics_url"), null), playlistId);
     }
 
     @PostMapping("/playlists/{playlistId}/songs/{songId}")

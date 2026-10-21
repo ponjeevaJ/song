@@ -12,17 +12,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class CatalogController {
     private final SongRepository songs;
     private final CatalogSyncService sync;
+    private final AppleMusicSearchService externalSearch;
 
-    public CatalogController(SongRepository songs, CatalogSyncService sync) {
+    public CatalogController(SongRepository songs, CatalogSyncService sync, AppleMusicSearchService externalSearch) {
         this.songs = songs;
         this.sync = sync;
+        this.externalSearch = externalSearch;
     }
 
     @GetMapping("/songs")
     public List<Song> search(@RequestParam(required = false) String query,
                              @RequestParam(required = false) Integer year,
                              @RequestParam(required = false) String genre) {
-        return songs.search(query, year, genre);
+        List<Song> catalogResults = songs.search(query, year, genre);
+        if (!catalogResults.isEmpty() || query == null || query.isBlank()) {
+            return catalogResults;
+        }
+        return externalSearch.search(query, year, genre);
     }
 
     @GetMapping("/songs/today")

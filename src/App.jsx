@@ -210,7 +210,10 @@ function App() {
       setSearchLoading(true);
       try {
         const results = await request(`/songs?${params.toString()}`);
-        if (!cancelled) setSearchResults(results);
+        if (!cancelled) {
+          setSearchResults(results);
+          requestAnimationFrame(() => document.getElementById('search-results')?.scrollIntoView({ behavior: 'smooth' }));
+        }
       } catch (e) {
         if (!cancelled) setError(e.message);
       } finally {
@@ -299,7 +302,9 @@ function App() {
     setYoutubePlayerOpen(isYouTubePlayback(song));
     if (!song.isFeaturedFallback) {
       setRecent((old) => [song, ...old.filter((item) => item.id !== song.id)].slice(0, 50));
-      if (token) request(`/me/history/${encodeURIComponent(song.id)}`, { method: 'POST' }, token).catch((e) => setError(e.message));
+      if (token && !song.providerUrl) {
+        request(`/me/history/${encodeURIComponent(song.id)}`, { method: 'POST' }, token).catch((e) => setError(e.message));
+      }
     }
     window.__isaiQueue = queue;
   };
@@ -519,7 +524,7 @@ function App() {
           <div className="breadcrumb">Isai World <span>/</span> <b>{isTamil ? 'கண்டறி' : 'Discover'}</b></div>
           <div className="topbar-actions">
             <form className="search-field" role="search" onSubmit={submitSearch}>
-              <input id="search-box" list="catalog-suggestions" placeholder={isTamil ? 'பாடல், கலைஞர், படம்...' : 'Songs, artists, movies...'} value={query} onChange={(e) => { setQuery(e.target.value); setActiveSearch(e.target.value); }} />
+              <input id="search-box" list="catalog-suggestions" placeholder={isTamil ? 'பாடல், கலைஞர், படம்...' : 'Songs, artists, movies...'} value={query} onChange={(e) => setQuery(e.target.value)} />
               <datalist id="catalog-suggestions">{songs.slice(0, 8).map((song) => <option key={song.id} value={song.title} />)}</datalist>
               <button className="search-submit" type="submit" aria-label={isTamil ? 'தேடு' : 'Search'} title={isTamil ? 'தேடு' : 'Search'}><Search size={16} /></button>
               <kbd>Ctrl/⌘ K</kbd>
@@ -535,7 +540,7 @@ function App() {
           {(activeSearch || searchYear || searchGenre) && (
             <section className="search-results" id="search-results">
               <div className="section-heading"><div><span className="eyebrow">FIND YOUR SOUND</span><h2>Search results{activeSearch && <span> for “{activeSearch}”</span>}</h2></div><div className="search-filters"><input aria-label="Filter by year" inputMode="numeric" maxLength={4} placeholder="Year" value={searchYear} onChange={(e) => setSearchYear(e.target.value.replace(/\D/g, '').slice(0, 4))} /><select aria-label="Filter by genre" value={searchGenre} onChange={(e) => setSearchGenre(e.target.value)}><option value="">All genres</option><option value="love">Love</option><option value="melody">Melody</option><option value="folk">Folk / Kuthu</option><option value="bgm">BGM / Instrumental</option></select><button className="text-button" onClick={() => { setQuery(''); setActiveSearch(''); setSearchYear(''); setSearchGenre(''); }}>Clear <X size={14} /></button></div></div>
-              {searchLoading ? <div className="empty-search" role="status">Searching the connected catalog…</div> : searchResults.length ? <div className="song-list">{searchResults.map((song) => <SongRow key={song.id} song={song} onPlay={playSong} onLike={toggleFavorite} liked={favorites.has(song.id)} />)}</div> : <div className="empty-search">No matching songs in the connected catalog yet.</div>}
+              {searchLoading ? <div className="empty-search" role="status">Searching the connected catalog…</div> : searchResults.length ? <div className="song-list">{searchResults.map((song) => <SongRow key={song.id} song={song} onPlay={playSong} onLike={song.providerUrl ? null : toggleFavorite} liked={favorites.has(song.id)} />)}</div> : <div className="empty-search">No matching songs in the connected catalog yet.</div>}
             </section>
           )}
 
@@ -636,7 +641,7 @@ function FeaturedYouTubeCard({ song, onPlay }) {
 }
 
 function SongRow({ song, onPlay, onLike, onRemove, liked }) {
-  return <div className="song-row"><button className="row-play" onClick={() => onPlay(song)}><Play size={15} fill="currentColor" /></button><Artwork song={song} small /><div className="row-details"><b>{song.title}</b><span>{[song.singer, song.movie, song.composer].filter(Boolean).join(' · ')}</span></div><span className="row-date">{song.releaseDate || ''}</span><button className={`mini-heart ${liked ? 'liked' : ''}`} onClick={() => onLike(song)} aria-label="Toggle favorite"><Heart size={16} fill={liked ? 'currentColor' : 'none'} /></button>{onRemove && <button className="remove-track" onClick={() => onRemove(song)} aria-label={`Remove ${song.title} from playlist`}><X size={15} /></button>}</div>;
+  return <div className="song-row"><button className="row-play" onClick={() => onPlay(song)}><Play size={15} fill="currentColor" /></button><Artwork song={song} small /><div className="row-details"><b>{song.title}</b><span>{[song.singer, song.movie, song.composer].filter(Boolean).join(' · ')}</span>{song.providerUrl && <a className="provider-attribution" href={song.providerUrl} target="_blank" rel="noreferrer">30-second preview · Open in Apple Music</a>}</div><span className="row-date">{song.releaseDate || ''}</span>{onLike && !song.providerUrl && <button className={`mini-heart ${liked ? 'liked' : ''}`} onClick={() => onLike(song)} aria-label="Toggle favorite"><Heart size={16} fill={liked ? 'currentColor' : 'none'} /></button>}{onRemove && <button className="remove-track" onClick={() => onRemove(song)} aria-label={`Remove ${song.title} from playlist`}><X size={15} /></button>}</div>;
 }
 
 function formatTime(seconds) {
