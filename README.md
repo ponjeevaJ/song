@@ -93,6 +93,12 @@ mvn spring-boot:run
 
 The Vite development server proxies `/api` to `http://localhost:8080`. The backend expects PostgreSQL at `localhost:5432` by default.
 
+## Deploy the frontend to GitHub Pages
+
+The `Deploy GitHub Pages` workflow builds the React app with the `/song/` base path and publishes the generated `dist` files. In the repository's **Settings → Pages**, select **GitHub Actions** as the build and deployment source. Push to `main` to deploy; the workflow can also be started manually from the Actions tab.
+
+GitHub Pages only hosts static files. To use catalog search, accounts, playlists, and playback, host the API separately over HTTPS, set the repository Actions variable `VITE_API_BASE_URL` to its origin (for example, `https://api.example.com`, without `/api`), and allow `https://ponjeevaj.github.io` in the backend's `CORS_ALLOWED_ORIGINS`. Without an API, the interface loads but catalog and account features remain unavailable.
+
 ## Deploy a public portal on Render
 
 The root `render.yaml` defines the frontend, API, and private PostgreSQL database in Singapore. The frontend serves the app over HTTPS and proxies `/api` to the API, so both use one origin. The blueprint uses persistent paid plans; Render shows the resource costs and asks you to approve them before creating services. No Render resources are created just by adding this file.
