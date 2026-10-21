@@ -97,7 +97,7 @@ The Vite development server proxies `/api` to `http://localhost:8080`. The backe
 
 ## Deploy the frontend to GitHub Pages
 
-The `Deploy GitHub Pages` workflow builds the React app with the `/song/` base path and publishes the generated `dist` files. In the repository's **Settings → Pages**, select **GitHub Actions** as the build and deployment source. Push to `main` to deploy; the workflow can also be started manually from the Actions tab.
+The `Deploy GitHub Pages` workflow enables/configures GitHub Pages, builds the React app with the `/song/` base path, and publishes the generated `dist` files. Push to `main` to deploy; the workflow can also be started manually from the Actions tab. If Pages cannot be enabled by the workflow token, select **GitHub Actions** as the source in repository **Settings → Pages**.
 
 GitHub Pages only hosts static files. To use catalog search, accounts, playlists, and playback, host the API separately over HTTPS, set the repository Actions variable `VITE_API_BASE_URL` to its origin (for example, `https://api.example.com`, without `/api`), and allow `https://ponjeevaj.github.io` in the backend's `CORS_ALLOWED_ORIGINS`. Without an API, the interface loads but catalog and account features remain unavailable.
 
