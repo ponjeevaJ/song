@@ -13,11 +13,14 @@ public class CatalogController {
     private final SongRepository songs;
     private final CatalogSyncService sync;
     private final AppleMusicSearchService externalSearch;
+    private final YouTubeCatalogClient youtubeSearch;
 
-    public CatalogController(SongRepository songs, CatalogSyncService sync, AppleMusicSearchService externalSearch) {
+    public CatalogController(SongRepository songs, CatalogSyncService sync, AppleMusicSearchService externalSearch,
+                             YouTubeCatalogClient youtubeSearch) {
         this.songs = songs;
         this.sync = sync;
         this.externalSearch = externalSearch;
+        this.youtubeSearch = youtubeSearch;
     }
 
     @GetMapping("/songs")
@@ -27,6 +30,10 @@ public class CatalogController {
         List<Song> catalogResults = songs.search(query, year, genre);
         if (!catalogResults.isEmpty() || query == null || query.isBlank()) {
             return catalogResults;
+        }
+        if (youtubeSearch.configured() && year == null && (genre == null || genre.isBlank())) {
+            List<Song> youtubeResults = youtubeSearch.searchSongs(query);
+            if (!youtubeResults.isEmpty()) return youtubeResults;
         }
         return externalSearch.search(query, year, genre);
     }

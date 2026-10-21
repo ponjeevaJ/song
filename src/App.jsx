@@ -8,6 +8,8 @@ import {
 
 const API = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '').replace(/\/api$/i, '');
 const isYouTubePlayback = (song) => song?.playbackUrl?.startsWith('https://www.youtube.com/embed/');
+const isAppleMusicPlayback = (song) => song?.providerUrl?.startsWith('https://music.apple.com/');
+const appleMusicEmbedUrl = (song) => song.providerUrl.replace('https://music.apple.com/', 'https://embed.music.apple.com/');
 const request = async (path, options = {}, token = '') => {
   let response;
   try {
@@ -79,6 +81,7 @@ const featuredYouTubeSong = {
   genre: 'Tamil',
   artworkUrl: 'https://i.ytimg.com/vi/c3H8GjrklCk/hqdefault.jpg',
   playbackUrl: 'https://www.youtube.com/embed/c3H8GjrklCk',
+  providerUrl: 'https://www.youtube.com/watch?v=c3H8GjrklCk',
   isFeaturedFallback: true,
 };
 
@@ -100,6 +103,7 @@ const youtubeSearchUrl = (section) => {
   };
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(queries[section] || 'Tamil songs official')}`;
 };
+const youtubeTrackSearchUrl = (song) => `https://www.youtube.com/results?search_query=${encodeURIComponent(`${song.title} ${song.singer || ''} official`)}`;
 
 const indiaNow = new Date();
 const indiaDay = new Intl.DateTimeFormat('en', { weekday: 'long', timeZone: 'Asia/Kolkata' }).format(indiaNow).toUpperCase();
@@ -143,6 +147,7 @@ function App() {
   const [profile, setProfile] = useState(localStorage.getItem('isai-email') || '');
   const [current, setCurrent] = useState(null);
   const [youtubePlayerOpen, setYoutubePlayerOpen] = useState(false);
+  const [applePlayerOpen, setApplePlayerOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -285,6 +290,16 @@ function App() {
   const todaySongs = useMemo(() => songs.filter((song) => matching(song, 'new')), [songs]);
 
   const playSong = async (song, queue = songs) => {
+    if (isAppleMusicPlayback(song)) {
+      audioRef.current?.pause();
+      setCurrent(song);
+      setIsPlaying(false);
+      setYoutubePlayerOpen(false);
+      setApplePlayerOpen(true);
+      setRecent((old) => [song, ...old.filter((item) => item.id !== song.id)].slice(0, 50));
+      window.__isaiQueue = queue;
+      return;
+    }
     if (!song.playbackUrl) {
       setError('Playback is unavailable for this track. The licensed provider has not supplied an audio stream.');
       return;
@@ -299,6 +314,7 @@ function App() {
     }
     setCurrent(song);
     setIsPlaying(true);
+    setApplePlayerOpen(false);
     setYoutubePlayerOpen(isYouTubePlayback(song));
     if (!song.isFeaturedFallback) {
       setRecent((old) => [song, ...old.filter((item) => item.id !== song.id)].slice(0, 50));
@@ -312,6 +328,12 @@ function App() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    if (isAppleMusicPlayback(current)) {
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+      return;
+    }
     if (!current?.playbackUrl) return;
     if (isYouTubePlayback(current)) {
       audio.pause();
@@ -336,6 +358,10 @@ function App() {
   };
 
   const togglePlay = () => {
+    if (isAppleMusicPlayback(current)) {
+      setApplePlayerOpen(true);
+      return;
+    }
     if (isYouTubePlayback(current)) {
       setYoutubePlayerOpen(true);
       return;
@@ -608,12 +634,14 @@ function App() {
 
       <audio ref={audioRef} onTimeUpdate={(e) => setPosition(e.currentTarget.currentTime)} onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)} onEnded={() => repeat ? (audioRef.current.currentTime = 0, audioRef.current.play()) : stepSong(1)} onPause={() => setIsPlaying(false)} onPlay={() => setIsPlaying(true)} />
       {current && <div className="player">
-        <div className="player-track"><Artwork song={current} small /><div className="player-song"><b>{current.title}</b><span>{current.singer || current.movie || 'Tamil music'}</span></div>{current.lyricsUrl && <a className="lyrics-link" href={current.lyricsUrl} target="_blank" rel="noreferrer">Lyrics</a>}{!current.isFeaturedFallback && <button className={`heart-button ${favorites.has(current.id) ? 'liked' : ''}`} onClick={() => toggleFavorite(current)} aria-label="Favorite"><Heart size={17} fill={favorites.has(current.id) ? 'currentColor' : 'none'} /></button>}</div>
-        {isYouTubePlayback(current) ? <button className="player-center youtube-player-hint" onClick={() => setYoutubePlayerOpen(true)}>Open YouTube player controls</button> : <div className="player-center"><div className="player-controls"><button aria-label="Shuffle" className={shuffle ? 'control-active' : ''} onClick={() => setShuffle(!shuffle)}><Shuffle size={15} /></button><button aria-label="Previous" onClick={() => stepSong(-1)}><SkipBack size={18} fill="currentColor" /></button><button className="player-play" aria-label={isPlaying ? 'Pause' : 'Play'} onClick={togglePlay}>{isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}</button><button aria-label="Next" onClick={() => stepSong(1)}><SkipForward size={18} fill="currentColor" /></button><button aria-label="Repeat" className={repeat ? 'control-active' : ''} onClick={() => setRepeat(!repeat)}>↻</button></div><div className="timeline"><span>{formatTime(position)}</span><input type="range" min="0" max={duration || 100} value={Math.min(position, duration || 100)} onChange={(e) => { if (audioRef.current) audioRef.current.currentTime = Number(e.target.value); }} aria-label="Seek" /><span>{formatTime(duration)}</span></div></div>}
-        <div className="player-volume">{!isYouTubePlayback(current) && <><Volume2 size={17} /><input type="range" min="0" max="1" step="0.01" value={volume} onChange={(e) => setVolume(Number(e.target.value))} aria-label="Volume" /></>}<button aria-label="Close player" className="close-player" onClick={() => { audioRef.current?.pause(); setYoutubePlayerOpen(false); setCurrent(null); }}><X size={16} /></button></div>
+        <div className="player-track"><Artwork song={current} small /><div className="player-song"><b>{current.title}</b><span>{current.singer || current.movie || 'Tamil music'}</span></div>{current.lyricsUrl && <a className="lyrics-link" href={current.lyricsUrl} target="_blank" rel="noreferrer">Lyrics</a>}{!current.isFeaturedFallback && !current.providerUrl && <button className={`heart-button ${favorites.has(current.id) ? 'liked' : ''}`} onClick={() => toggleFavorite(current)} aria-label="Favorite"><Heart size={17} fill={favorites.has(current.id) ? 'currentColor' : 'none'} /></button>}</div>
+        {isAppleMusicPlayback(current) ? <button className="player-center youtube-player-hint" onClick={() => setApplePlayerOpen(true)}>Open Apple Music player</button> : isYouTubePlayback(current) ? <button className="player-center youtube-player-hint" onClick={() => setYoutubePlayerOpen(true)}>Open YouTube player controls</button> : <div className="player-center"><div className="player-controls"><button aria-label="Shuffle" className={shuffle ? 'control-active' : ''} onClick={() => setShuffle(!shuffle)}><Shuffle size={15} /></button><button aria-label="Previous" onClick={() => stepSong(-1)}><SkipBack size={18} fill="currentColor" /></button><button className="player-play" aria-label={isPlaying ? 'Pause' : 'Play'} onClick={togglePlay}>{isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}</button><button aria-label="Next" onClick={() => stepSong(1)}><SkipForward size={18} fill="currentColor" /></button><button aria-label="Repeat" className={repeat ? 'control-active' : ''} onClick={() => setRepeat(!repeat)}>↻</button></div><div className="timeline"><span>{formatTime(position)}</span><input type="range" min="0" max={duration || 100} value={Math.min(position, duration || 100)} onChange={(e) => { if (audioRef.current) audioRef.current.currentTime = Number(e.target.value); }} aria-label="Seek" /><span>{formatTime(duration)}</span></div></div>}
+        <div className="player-volume">{!isYouTubePlayback(current) && !isAppleMusicPlayback(current) && <><Volume2 size={17} /><input type="range" min="0" max="1" step="0.01" value={volume} onChange={(e) => setVolume(Number(e.target.value))} aria-label="Volume" /></>}<button aria-label="Close player" className="close-player" onClick={() => { audioRef.current?.pause(); setYoutubePlayerOpen(false); setApplePlayerOpen(false); setCurrent(null); }}><X size={16} /></button></div>
       </div>}
 
-      {youtubePlayerOpen && isYouTubePlayback(current) && <div className="youtube-player-backdrop" role="dialog" aria-modal="true" aria-label={`YouTube player: ${current.title}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setYoutubePlayerOpen(false); }}><section className="youtube-player-dialog"><div className="youtube-player-heading"><div><b>{current.title}</b><span>{current.singer}</span></div><button aria-label="Close YouTube player" onClick={() => setYoutubePlayerOpen(false)}><X size={18} /></button></div><div className="youtube-frame"><iframe src={`${current.playbackUrl}?controls=1&playsinline=1&rel=0`} title={`YouTube video: ${current.title}`} allow="encrypted-media; picture-in-picture; fullscreen" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div><p>Playback is provided by YouTube. Press play inside the embedded player.</p></section></div>}
+      {applePlayerOpen && isAppleMusicPlayback(current) && <div className="youtube-player-backdrop" role="dialog" aria-modal="true" aria-label={`Apple Music player: ${current.title}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setApplePlayerOpen(false); }}><section className="youtube-player-dialog"><div className="youtube-player-heading"><div><b>{current.title}</b><span>{current.singer}</span></div><button aria-label="Close Apple Music player" onClick={() => setApplePlayerOpen(false)}><X size={18} /></button></div><div className="youtube-frame apple-music-frame"><iframe src={appleMusicEmbedUrl(current)} title={`Apple Music preview: ${current.title}`} allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" referrerPolicy="strict-origin-when-cross-origin" /></div><p>Apple previews may require sign-in or may be unavailable for some tracks. Try the official track page or search for an authorized upload:</p><div className="provider-play-links"><a className="apple-music-link" href={current.providerUrl} target="_blank" rel="noreferrer">Open this track on Apple Music</a><a className="youtube-music-link" href={youtubeTrackSearchUrl(current)} target="_blank" rel="noreferrer">Find this track on YouTube</a></div></section></div>}
+
+      {youtubePlayerOpen && isYouTubePlayback(current) && <div className="youtube-player-backdrop" role="dialog" aria-modal="true" aria-label={`YouTube player: ${current.title}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setYoutubePlayerOpen(false); }}><section className="youtube-player-dialog"><div className="youtube-player-heading"><div><b>{current.title}</b><span>{current.singer}</span></div><button aria-label="Close YouTube player" onClick={() => setYoutubePlayerOpen(false)}><X size={18} /></button></div><div className="youtube-frame"><iframe src={`${current.playbackUrl}?controls=1&playsinline=1&rel=0`} title={`YouTube video: ${current.title}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div><p>If YouTube shows a playback error in the embedded player, open the video directly on YouTube.</p><a className="youtube-video-link" href={current.providerUrl || youtubeTrackSearchUrl(current)} target="_blank" rel="noreferrer">{current.providerUrl ? 'Open this video on YouTube' : 'Search this song on YouTube'}</a></section></div>}
 
       {authOpen && <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setAuthOpen(false)}><form className="auth-modal" onSubmit={handleAuth}><button type="button" className="modal-close" onClick={() => setAuthOpen(false)}><X size={18} /></button><div className="auth-logo"><AudioLines size={20} /></div><span className="eyebrow">WELCOME TO ISAI WORLD</span><h2>{isRegister ? 'Create your account' : 'Come on in'}</h2><p>Save favorites and keep your listening close.</p>{error && <div className="auth-error" role="alert">{error}</div>}<label>Email address<input type="email" name="email" autoComplete="email" required placeholder="you@example.com" /></label><label>Password<input type="password" name="password" minLength="10" autoComplete={isRegister ? 'new-password' : 'current-password'} required placeholder="At least 10 characters" /></label><button type="submit" className="primary-button auth-submit" disabled={busy}>{busy ? <LoaderCircle size={17} className="spin" /> : null}{isRegister ? 'Create account' : 'Log in'}</button><button type="button" className="switch-auth" onClick={() => { setError(''); setIsRegister(!isRegister); }}>{isRegister ? 'Already have an account? Log in' : 'New here? Create an account'}</button></form></div>}
     </div>
@@ -641,7 +669,8 @@ function FeaturedYouTubeCard({ song, onPlay }) {
 }
 
 function SongRow({ song, onPlay, onLike, onRemove, liked }) {
-  return <div className="song-row"><button className="row-play" onClick={() => onPlay(song)}><Play size={15} fill="currentColor" /></button><Artwork song={song} small /><div className="row-details"><b>{song.title}</b><span>{[song.singer, song.movie, song.composer].filter(Boolean).join(' · ')}</span>{song.providerUrl && <a className="provider-attribution" href={song.providerUrl} target="_blank" rel="noreferrer">30-second preview · Open in Apple Music</a>}</div><span className="row-date">{song.releaseDate || ''}</span>{onLike && !song.providerUrl && <button className={`mini-heart ${liked ? 'liked' : ''}`} onClick={() => onLike(song)} aria-label="Toggle favorite"><Heart size={16} fill={liked ? 'currentColor' : 'none'} /></button>}{onRemove && <button className="remove-track" onClick={() => onRemove(song)} aria-label={`Remove ${song.title} from playlist`}><X size={15} /></button>}</div>;
+  const appleResult = song.providerUrl?.startsWith('https://music.apple.com/');
+  return <div className="song-row"><button className="row-play" onClick={() => onPlay(song)} aria-label={`Open player for ${song.title}`}><Play size={15} fill="currentColor" /></button><Artwork song={song} small /><div className="row-details"><b>{song.title}</b><span>{[song.singer, song.movie, song.composer].filter(Boolean).join(' · ')}</span>{song.providerUrl && <><a className="provider-attribution" href={song.providerUrl} target="_blank" rel="noreferrer">{appleResult ? '30-second preview · Open in Apple Music' : 'Open video on YouTube'}</a>{appleResult && <a className="youtube-result-link" href={youtubeTrackSearchUrl(song)} target="_blank" rel="noreferrer">Search YouTube</a>}</>}</div><span className="row-date">{song.releaseDate || ''}</span>{onLike && !song.providerUrl && <button className={`mini-heart ${liked ? 'liked' : ''}`} onClick={() => onLike(song)} aria-label="Toggle favorite"><Heart size={16} fill={liked ? 'currentColor' : 'none'} /></button>}{onRemove && <button className="remove-track" onClick={() => onRemove(song)} aria-label={`Remove ${song.title} from playlist`}><X size={15} /></button>}</div>;
 }
 
 function formatTime(seconds) {

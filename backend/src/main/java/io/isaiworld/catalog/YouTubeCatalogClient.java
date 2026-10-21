@@ -6,6 +6,9 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -30,26 +33,48 @@ public class YouTubeCatalogClient {
     }
 
     public List<ProviderSong> searchTamilMusic() {
+        return searchVideos("Tamil songs", "date").stream()
+            .map(this::toProviderSong)
+            .toList();
+    }
+
+    public List<Song> searchSongs(String query) {
+        if (query == null || query.isBlank()) return List.of();
+        if (query.trim().length() > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Search text must be 100 characters or fewer.");
+        }
+        return searchVideos(query.trim(), "relevance").stream()
+            .map(this::toSong)
+            .toList();
+    }
+
+    private List<SearchItem> searchVideos(String query, String order) {
         if (!configured()) {
             throw new IllegalStateException("Configure YOUTUBE_API_KEY to search YouTube.");
         }
-        YouTubeResponse response = restClient.get()
-            .uri(UriComponentsBuilder.fromUriString("https://www.googleapis.com/youtube/v3/search")
-                .queryParam("part", "snippet")
-                .queryParam("type", "video")
-                .queryParam("videoEmbeddable", "true")
-                .queryParam("videoSyndicated", "true")
-                .queryParam("regionCode", "IN")
-                .queryParam("relevanceLanguage", "ta")
-                .queryParam("order", "date")
-                .queryParam("maxResults", 25)
-                .queryParam("q", "Tamil songs")
-                .queryParam("key", apiKey)
-                .build()
-                .encode()
-                .toUri())
-            .retrieve()
-            .body(YouTubeResponse.class);
+        YouTubeResponse response;
+        try {
+            response = restClient.get()
+                .uri(UriComponentsBuilder.fromUriString("https://www.googleapis.com/youtube/v3/search")
+                    .queryParam("part", "snippet")
+                    .queryParam("type", "video")
+                    .queryParam("videoEmbeddable", "true")
+                    .queryParam("videoSyndicated", "true")
+                    .queryParam("regionCode", "IN")
+                    .queryParam("relevanceLanguage", "ta")
+                    .queryParam("order", order)
+                    .queryParam("maxResults", 25)
+                    .queryParam("q", "{query}")
+                    .queryParam("key", apiKey)
+                    .encode()
+                    .buildAndExpand(query)
+                    .toUri())
+                .retrieve()
+                .body(YouTubeResponse.class);
+        } catch (RestClientException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                "YouTube search is temporarily unavailable. Please try again.", exception);
+        }
         if (response == null || response.items() == null) {
             return List.of();
         }
@@ -57,24 +82,24 @@ public class YouTubeCatalogClient {
             .filter(item -> item != null && item.id() != null && item.id().videoId() != null
                 && item.id().videoId().matches("[A-Za-z0-9_-]{11}") && item.snippet() != null
                 && item.snippet().title() != null && !item.snippet().title().isBlank())
-            .map(item -> {
-                var snippet = item.snippet();
-                String artwork = snippet.thumbnails() == null ? null : snippet.thumbnails().bestUrl();
-                LocalDate published = snippet.publishedAt() == null ? null : snippet.publishedAt().toLocalDate();
-                return new ProviderSong(
-                    item.id().videoId(),
-                    snippet.title(),
-                    null,
-                    snippet.channelTitle() == null ? "YouTube" : "YouTube channel: " + snippet.channelTitle(),
-                    null,
-                    null,
-                    "Tamil",
-                    published,
-                    artwork,
-                    "https://www.youtube.com/embed/" + item.id().videoId(),
-                    null);
-            })
             .toList();
+    }
+
+    private ProviderSong toProviderSong(SearchItem item) {
+        var snippet = item.snippet();
+        String artwork = snippet.thumbnails() == null ? null : snippet.thumbnails().bestUrl();
+        LocalDate published = snippet.publishedAt() == null ? null : snippet.publishedAt().toLocalDate();
+        return new ProviderSong(item.id().videoId(), snippet.title(), null,
+            snippet.channelTitle() == null ? "YouTube" : "YouTube channel: " + snippet.channelTitle(),
+            null, null, "Tamil", published, artwork,
+            "https://www.youtube.com/embed/" + item.id().videoId(), null);
+    }
+
+    private Song toSong(SearchItem item) {
+        ProviderSong video = toProviderSong(item);
+        return new Song("youtube.com:" + video.id(), video.title(), video.movie(), video.singer(), video.composer(),
+            video.album(), video.genre(), video.releaseDate(), video.artworkUrl(), video.playbackUrl(), video.lyricsUrl(),
+            "https://www.youtube.com/watch?v=" + video.id());
     }
 
     private record YouTubeResponse(List<SearchItem> items) {}

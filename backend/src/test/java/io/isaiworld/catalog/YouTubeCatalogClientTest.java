@@ -51,6 +51,38 @@ class YouTubeCatalogClientTest {
     }
 
     @Test
+    void returnsPlayableVideoSongsForSearchQueries() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo(org.hamcrest.Matchers.containsString("youtube/v3/search")))
+            .andExpect(method(HttpMethod.GET))
+            .andExpect(requestTo(org.hamcrest.Matchers.containsString("q=Kangna%20Tera%20Ni")))
+            .andExpect(queryParam("order", "relevance"))
+            .andExpect(queryParam("videoEmbeddable", "true"))
+            .andRespond(withSuccess("""
+                {
+                  "items": [{
+                    "id": {"videoId": "abcdefghijk"},
+                    "snippet": {
+                      "title": "Kangna Tera Ni - Official Video",
+                      "channelTitle": "Official Music",
+                      "publishedAt": "2026-10-20T10:15:00Z",
+                      "thumbnails": {"high": {"url": "https://img.youtube.com/cover.jpg"}}
+                    }
+                  }]
+                }
+                """, MediaType.APPLICATION_JSON));
+
+        var songs = new YouTubeCatalogClient("test-key", builder).searchSongs("Kangna Tera Ni");
+
+        assertEquals(1, songs.size());
+        assertEquals("youtube.com:abcdefghijk", songs.getFirst().id());
+        assertEquals("https://www.youtube.com/embed/abcdefghijk", songs.getFirst().playbackUrl());
+        assertEquals("https://www.youtube.com/watch?v=abcdefghijk", songs.getFirst().providerUrl());
+        server.verify();
+    }
+
+    @Test
     void rejectsSyncWithoutAnApiKey() {
         var client = new YouTubeCatalogClient("", RestClient.builder());
 

@@ -1,5 +1,7 @@
 package io.isaiworld.catalog;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -21,12 +23,14 @@ public class AppleMusicSearchService {
     private static final String SEARCH_URL = "https://itunes.apple.com/search";
     private static final int MAX_QUERY_LENGTH = 100;
     private final RestClient restClient;
+    private final ObjectMapper objectMapper;
 
-    public AppleMusicSearchService(RestClient.Builder restClientBuilder) {
+    public AppleMusicSearchService(RestClient.Builder restClientBuilder, ObjectMapper objectMapper) {
         var requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(5));
         requestFactory.setReadTimeout(Duration.ofSeconds(10));
         this.restClient = restClientBuilder.requestFactory(requestFactory).build();
+        this.objectMapper = objectMapper;
     }
 
     public List<Song> search(String query, Integer year, String genre) {
@@ -45,11 +49,16 @@ public class AppleMusicSearchService {
                 .encode()
                 .buildAndExpand(term)
                 .toUri();
-            response = restClient.get().uri(uri).retrieve().body(SearchResponse.class);
+            String body = restClient.get().uri(uri).retrieve().body(String.class);
+            response = body == null ? null : objectMapper.readValue(body, SearchResponse.class);
         } catch (RestClientException exception) {
             log.warn("Apple music search failed ({})", exception.getClass().getSimpleName());
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                 "Online music search is temporarily unavailable. Please try again.", exception);
+        } catch (JsonProcessingException exception) {
+            log.warn("Apple music search returned invalid JSON.");
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                "Online music search returned an invalid response. Please try again.", exception);
         }
 
         if (response == null || response.results() == null) {
@@ -69,7 +78,7 @@ public class AppleMusicSearchService {
     private Song toSong(AppleTrack track) {
         var releaseDate = track.releaseDate() == null ? null : OffsetDateTime.parse(track.releaseDate()).toLocalDate();
         return new Song("itunes.apple.com:" + track.trackId(), track.trackName(), null, track.artistName(), null,
-            track.collectionName(), track.primaryGenreName(), releaseDate, track.artworkUrl100(), track.previewUrl(),
+            track.collectionName(), track.primaryGenreName(), releaseDate, track.artworkUrl100(), null,
             null, track.trackViewUrl());
     }
 
